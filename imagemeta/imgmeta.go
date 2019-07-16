@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -46,18 +47,29 @@ func isFileExist(f string) bool {
 	return err == nil
 }
 
-func addedDuplicatedMark(newFileName string) string {
-	name := newFileName
+func getNewName(path string, name string, ext string) string {
+	nameExceptExt := filepath.Join(path, name)
+	fullname := nameExceptExt + ext
 
 	i := 1
 	for {
-		if isFileExist(name) == false {
-			return name
+		if isFileExist(fullname) == false {
+			return fullname
 		}
 
-		name = newFileName + fmt.Sprintf("(%v)", i)
+		fullname = nameExceptExt + fmt.Sprintf("(%v)", i) + ext
 		i++
 	}
+}
+
+func isJpgFile(filename string) bool {
+	extName := filepath.Ext(filename)
+	return strings.EqualFold(extName, ".JPG") || strings.EqualFold(extName, ".JPEG")
+}
+
+func isMp4File(filename string) bool {
+	extName := filepath.Ext(filename)
+	return strings.EqualFold(extName, ".MP4")
 }
 
 func main() {
@@ -83,8 +95,11 @@ func main() {
 
 	for _, file := range fileInfo {
 		filename := file.Name()
-		if strings.EqualFold(filepath.Ext(filename), ".JPG") {
-			x, err := decodeImage(filename)
+		fullpath := filepath.Join(imagepathArg, filename)
+
+		// 이미지 파일 처리
+		if isJpgFile(filename) {
+			x, err := decodeImage(fullpath)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -100,24 +115,46 @@ func main() {
 				fmt.Printf("%v - No taken-time, %v\n", filename, gps)
 			} else {
 				if renameArg == true {
-					newFileName := fmt.Sprintf("%v-%02d-%02d %02d:%02d:%02d%v", tm.Year(), tm.Month(), tm.Day(), tm.Hour(), tm.Minute(), tm.Second(), filepath.Ext(filename))
+					newPureFileName := fmt.Sprintf("%v-%02d-%02d %02d.%02d.%02d", tm.Year(), tm.Month(), tm.Day(), tm.Hour(), tm.Minute(), tm.Second())
+					newFileName := newPureFileName + filepath.Ext(filename)
 
 					if filename != newFileName {
-						if isFileExist(newFileName) == true {
-							addedDuplicatedMark(newFileName)
-						}
-
-						err := os.Rename(filename, newFileName)
+						newFullPathName := getNewName(imagepathArg, newPureFileName, filepath.Ext(filename))
+						err := os.Rename(fullpath, newFullPathName)
 						if err != nil {
 							log.Fatal(err)
 						}
 
+						_, newFileName := filepath.Split(newFileName)
 						fmt.Printf("%v : %v ---> %v\n", filename, gps, newFileName)
+					} else {
+						fmt.Printf("%v : %v\n", filename, gps)
 					}
-					fmt.Printf("%v : %v\n", filename, gps)
 				} else {
 					fmt.Printf("%v : %v\n", filename, gps)
 				}
+			}
+		} else if isMp4File(filename) {
+			// 20190602_140042.mp4 형태인 경우
+			match, _ := regexp.MatchString("^\\d{8}_\\d{6}\\.", filename)
+			if renameArg == true && match == true {
+				year := filename[:4]
+				month := filename[4:6]
+				day := filename[6:8]
+				hour := filename[9:11]
+				min := filename[11:13]
+				sec := filename[13:15]
+
+				newPureFileName := fmt.Sprintf("%v-%v-%v %v.%v.%v", year, month, day, hour, min, sec)
+
+				newFullPathName := getNewName(imagepathArg, newPureFileName, filepath.Ext(filename))
+				err := os.Rename(fullpath, newFullPathName)
+				if err != nil {
+					log.Fatal(err)
+				}
+				_, newFileName := filepath.Split(newFullPathName)
+
+				fmt.Printf("%v ---> %v\n", filename, newFileName)
 			}
 		}
 	}
