@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/rwcarlsen/goexif/exif"
 	"github.com/rwcarlsen/goexif/mknote"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -23,6 +24,8 @@ func decodeImage(fname string) (*exif.Exif, error) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	defer f.Close()
 
 	// Optionally register camera makenote data parsing - currently Nikon and
 	// Canon are supported.
@@ -70,6 +73,31 @@ func isJpgFile(filename string) bool {
 func isMp4File(filename string) bool {
 	extName := filepath.Ext(filename)
 	return strings.EqualFold(extName, ".MP4")
+}
+
+func copy(src, dst string) (int64, error) {
+	sourceFileStat, err := os.Stat(src)
+	if err != nil {
+		return 0, err
+	}
+
+	if !sourceFileStat.Mode().IsRegular() {
+		return 0, fmt.Errorf("%s is not a regular file", src)
+	}
+
+	source, err := os.Open(src)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		return 0, err
+	}
+	defer destination.Close()
+	nBytes, err := io.Copy(destination, source)
+	return nBytes, err
 }
 
 func main() {
@@ -120,6 +148,7 @@ func main() {
 
 					if filename != newFileName {
 						newFullPathName := getNewName(imagepathArg, newPureFileName, filepath.Ext(filename))
+						//copy(fullpath, newFullPathName)
 						err := os.Rename(fullpath, newFullPathName)
 						if err != nil {
 							log.Fatal(err)
